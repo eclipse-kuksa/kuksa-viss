@@ -1,0 +1,4 @@
+websockets>=11
+kuksa-client>=0.4.0a2
+jsonschema~=4.17
+referencing>=0.27

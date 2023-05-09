@@ -14,10 +14,10 @@ vissresolver = RefResolver.from_schema(
     store={"vissv2base": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "definitions": {
-		    "requestId": {
-			    "description": "Returned by the server in the response and used by the client to link the request and response messages.",
-			    "type": "string"
-		    },
+            "requestId": {
+                "description": "Returned by the server in the response and used by the client to link the request and response messages.",
+                "type": "string"
+            },
             "path": {
                 "description": "The path to the desired vehicle signal(s), as defined by the metadata schema.",
                 "type": "string"
@@ -31,7 +31,7 @@ vissresolver = RefResolver.from_schema(
 )
 
 
-GET_SCHEMA=json.loads("""
+GET_SCHEMA = json.loads("""
 {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "title": "Get Request",
@@ -70,7 +70,7 @@ GET_SCHEMA=json.loads("""
 }
 """)
 
-SET_SCHEMA=json.loads("""
+SET_SCHEMA = json.loads("""
 {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "title": "Set Request",
@@ -93,13 +93,13 @@ SET_SCHEMA=json.loads("""
         }
     }
 }
-""")                     
+""")
 
 
 async def process_get(websocket, kuksa, msg):
     print("Process GET")
     try:
-        validator=Draft202012Validator(GET_SCHEMA, resolver=vissresolver)
+        validator = Draft202012Validator(GET_SCHEMA, resolver=vissresolver)
         validator.validate(msg)
     except ValidationError as exp:
         await websocket.send(err.create_badrequest_error(f"Invalid get request: {exp.message}"))
@@ -107,45 +107,45 @@ async def process_get(websocket, kuksa, msg):
     try:
         current_values = await kuksa.get_current_values([msg["path"]])
     except VSSClientError as exp:
-        err_data=exp.to_dict()["error"]
-        await websocket.send(err.createVISSV2Error(err_data["code"],err_data["reason"],err_data["message"]))
+        err_data = exp.to_dict()["error"]
+        await websocket.send(err.createVISSV2Error(err_data["code"], err_data["reason"], err_data["message"]))
         return
-    
 
-    datapoints=dp.populate_datapoints(current_values)
+    datapoints = dp.populate_datapoints(current_values)
 
     if not any(datapoints):
         await websocket.send(err.createVISSV2Error(404, "unavailable_data", "Currently no data available for your request"))
         return
-    reply={}
-    reply["requestId"]=msg["requestId"]
-    reply["action"]="get"
-    reply["data"]=datapoints
-       
+    reply = {}
+    reply["requestId"] = msg["requestId"]
+    reply["action"] = "get"
+    reply["data"] = datapoints
+
     await websocket.send(json.dumps(reply))
+
 
 async def process_set(websocket, kuksa, msg):
     print("Process SET")
     try:
-        validator=Draft202012Validator(SET_SCHEMA, resolver=vissresolver)
+        validator = Draft202012Validator(SET_SCHEMA, resolver=vissresolver)
         validator.validate(msg)
     except ValidationError as exp:
         await websocket.send(err.create_badrequest_error(f"Invalid set request: {exp.message}"))
         return
-    
-    try: 
+
+    try:
         print("Setting targets")
-        res=await kuksa.set_target_values({
+        res = await kuksa.set_target_values({
             msg["path"]: Datapoint(msg["value"]),
         })
         print(f"Result is: {res} ")
     except VSSClientError as exp:
-        err_data=exp.to_dict()["error"]
-        await websocket.send(err.createVISSV2Error(err_data["code"],err_data["reason"],err_data["message"]))
+        err_data = exp.to_dict()["error"]
+        await websocket.send(err.createVISSV2Error(err_data["code"], err_data["reason"], err_data["message"]))
         return
-    
-    #All good
-    reply={ "action": "set", "requestId": msg["requestId"], "ts": datetime.now().isoformat(timespec="microseconds")}
+
+    # All good
+    reply = {"action": "set", "requestId": msg["requestId"], "ts": datetime.now().isoformat(timespec="microseconds")}
 
     await websocket.send(json.dumps(reply))
 
@@ -154,15 +154,13 @@ async def process_request(websocket, kuksa, msg):
     if "action" not in msg:
         await websocket.send(err.create_badrequest_error("The request does not contain an action"))
         return
-    
-    if msg["action"] not in ["get","set","subscribe"]:
+
+    if msg["action"] not in ["get", "set", "subscribe"]:
         await websocket.send(err.create_badrequest_error(f"Unknown action {msg['action']}"))
         return
-    
+
     if msg["action"] == "get":
         await process_get(websocket, kuksa, msg)
 
     if msg["action"] == "set":
         await process_set(websocket, kuksa, msg)
-
-    

@@ -12,3 +12,6 @@ repos:
     rev: '6.0.0'
     hooks:
     -   id: flake8
+        args: [
+            --ignore, 'E501',
+        ]

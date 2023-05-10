@@ -9,5 +9,11 @@ Supported calls
  - Simple set (no filters)
  - Simple subsribe (no filters)
 
+To install and run
+
+```
+pip install -r requirements.txt
+python tinyvissv2.py
+```
 
 See `test.py` for a simple client for testing

@@ -3,18 +3,21 @@ import websockets
 import json
 import errorhelper as err
 import vissv2impl
+import argparse
 
 from kuksa_client.grpc.aio import VSSClient
 
 
 async def vissv2(websocket):
+    global dbhost, dbport
     if websocket.subprotocol != "VISSv2":
         if websocket.subprotocol is not None:
             await websocket.close(reason=f"Unsupported subprotocol {websocket.subprotocol} ")
             return
         print("Warning: No subprotocol selected. Moving on, but a well-behaved client shall set subprotocol to VISSv2")
 
-    kuksa = VSSClient('127.0.0.1', 55557)
+    print(f"Connecting to databroker at {dbhost} port {dbport}")
+    kuksa = VSSClient(dbhost, dbport)
     try:
         await kuksa.connect()
     except Exception as exp:
@@ -42,9 +45,24 @@ async def vissv2(websocket):
         print("Processing done")
 
 
-async def main():
-    async with websockets.serve(vissv2, "localhost", 8765, subprotocols=["VISSv2"]):
+async def main(args):
+    print(f"Listening on port {args.port}")
+    print(f"Will use {args.dbhost} port {args.dbport} for databroker connection")
+    async with websockets.serve(vissv2, "localhost", args.port, subprotocols=["VISSv2"]):
         await asyncio.Future()  # run forever
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    global dbhost
+    global dbport
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--dbhost', help="KUKSA databroker host", default="localhost")
+    parser.add_argument(
+        '--dbport', type=int, help="KUKSA databroker port", default=555555)
+    parser.add_argument(
+        '--port', type=int, help="VISS websocket port", default=8090)
+    args = parser.parse_args()
+    dbhost = args.dbhost
+    dbport = args.dbport
+
+    asyncio.run(main(args))

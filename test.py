@@ -5,7 +5,7 @@ import websockets
 
 
 async def hello():
-    uri = "ws://localhost:8765"
+    uri = "ws://localhost:8090"
     async with websockets.connect(uri, subprotocols=["VISSv2"]) as websocket:
         # name = input("What's your name? ")
 
@@ -47,6 +47,24 @@ async def hello():
         rep = await websocket.recv()
         print(f"<<< {rep}")
 
+        print("Subscribe test")
+        await websocket.send('''{"action": "subscribe"}''')
+        rep = await websocket.recv()
+        print(f"<<< {rep}")
+
+        await websocket.send('''{"action": "subscribe", "path": "Vehicle.NotExist", "requestId":"sddf"}''')
+        while True:
+            rep = await websocket.recv()
+            print(f"<<< {rep}")
+            if "error" in rep:
+                break
+
+        await websocket.send('''{"action": "subscribe", "path": "Vehicle.Speed", "requestId":"sddf"}''')
+        while True:
+            rep = await websocket.recv()
+            print(f"<<< {rep}")
+            if "error" in rep:
+                break
 
 if __name__ == "__main__":
     asyncio.run(hello())

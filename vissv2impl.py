@@ -1,3 +1,4 @@
+import uuid
 import errorhelper as err
 import datapointhelper as dp
 
@@ -95,6 +96,35 @@ SET_SCHEMA = json.loads("""
 }
 """)
 
+SUBSCRIBE_SCHEMA = json.loads("""
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "Subscribe Request",
+    "description": "Allows the client to subscribe to time-varying signal notifications on the server.",
+    "type": "object",
+    "required": ["action", "path", "requestId"],
+    "properties": {
+        "action": {
+            "enum": [ "subscribe" ],
+            "description": "The identifier for the subscription request"
+        },
+        "path": {
+            "$ref": "vissv2base#/definitions/path"
+        },
+        "attribute": {
+            "enum": [ "targetValue", "value" ],
+            "description": "The attributes to be fetched for the get request"
+        },
+        "filters": {
+            "$ref": "vissv2base#/definitions/filter"
+        },
+        "requestId": {
+            "$ref": "vissv2base#/definitions/requestId"
+        }
+    }
+}
+""")
+
 
 async def process_get(websocket, kuksa, msg):
     print("Process GET")
@@ -150,6 +180,36 @@ async def process_set(websocket, kuksa, msg):
     await websocket.send(json.dumps(reply))
 
 
+async def process_subscribe(websocket, kuksa, msg):
+    print("Process SUBSCRIBE")
+    try:
+        validator = Draft202012Validator(SUBSCRIBE_SCHEMA, resolver=vissresolver)
+        validator.validate(msg)
+    except ValidationError as exp:
+        await websocket.send(err.create_badrequest_error(f"Invalid set request: {exp.message}"))
+        return
+
+    subscriptionId = str(uuid.uuid4())
+    subscriptionReply = {"action": "subscribe", "requestId": msg["requestId"], "ts": datetime.now().isoformat(timespec="microseconds"), "subscriptionId": subscriptionId}
+    await websocket.send(json.dumps(subscriptionReply))
+
+    subscriptionReply["action"] = "subscription"
+
+    try:
+        async for update in kuksa.subscribe_current_values([
+            msg['path']
+        ]):
+            print(f"Sub update: {update}")
+            if msg['path'] in update and update[msg['path']] is not None:
+                subscriptionReply["ts"] = datetime.now().isoformat(timespec="microseconds")
+                subscriptionReply['data'] = dp.populate_datapoints(update)
+                await websocket.send(json.dumps(subscriptionReply))
+    except VSSClientError as exp:
+        err_data = exp.to_dict()["error"]
+        await websocket.send(err.createVISSV2Error(err_data["code"], err_data["reason"], err_data["message"]))
+        return
+
+
 async def process_request(websocket, kuksa, msg):
     if "action" not in msg:
         await websocket.send(err.create_badrequest_error("The request does not contain an action"))
@@ -162,5 +222,8 @@ async def process_request(websocket, kuksa, msg):
     if msg["action"] == "get":
         await process_get(websocket, kuksa, msg)
 
-    if msg["action"] == "set":
+    elif msg["action"] == "set":
         await process_set(websocket, kuksa, msg)
+
+    elif msg["action"] == "subscribe":
+        await process_subscribe(websocket, kuksa, msg)

@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--dbhost', help="KUKSA databroker host", default="localhost")
     parser.add_argument(
-        '--dbport', type=int, help="KUKSA databroker port", default=555555)
+        '--dbport', type=int, help="KUKSA databroker port", default=55555)
     parser.add_argument(
         '--port', type=int, help="VISS websocket port", default=8090)
     args = parser.parse_args()

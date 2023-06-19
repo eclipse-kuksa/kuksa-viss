@@ -89,6 +89,9 @@ SET_SCHEMA = json.loads("""
         "path": {
             "$ref": "vissv2base#/definitions/path"
         },
+        "authorization": {
+            "$ref": "vissv2base#/definitions/authorization"
+        },
         "requestId": {
             "$ref": "vissv2base#/definitions/requestId"
         }
@@ -115,6 +118,9 @@ SUBSCRIBE_SCHEMA = json.loads("""
             "enum": [ "targetValue", "value" ],
             "description": "The attributes to be fetched for the get request"
         },
+        "authorization": {
+            "$ref": "vissv2base#/definitions/authorization"
+        },
         "filters": {
             "$ref": "vissv2base#/definitions/filter"
         },
@@ -135,6 +141,8 @@ async def process_get(websocket, kuksa, msg):
         await websocket.send(err.create_badrequest_error(f"Invalid get request: {exp.message}"))
         return
     try:
+        if "authorization" in msg:
+            await kuksa.authorize(msg["authorization"])
         current_values = await kuksa.get_current_values([msg["path"]])
     except VSSClientError as exp:
         err_data = exp.to_dict()["error"]
@@ -165,6 +173,8 @@ async def process_set(websocket, kuksa, msg):
 
     try:
         print("Setting targets")
+        if "authorization" in msg:
+            await kuksa.authorize(msg["authorization"])
         res = await kuksa.set_target_values({
             msg["path"]: Datapoint(msg["value"]),
         })
@@ -196,6 +206,8 @@ async def process_subscribe(websocket, kuksa, msg):
     subscriptionReply["action"] = "subscription"
 
     try:
+        if "authorization" in msg:
+            await kuksa.authorize(msg["authorization"])
         async for update in kuksa.subscribe_current_values([
             msg['path']
         ]):

@@ -70,18 +70,82 @@ GET_SCHEMA = json.loads("""
     }
 }
 """)
+                        
+GET_METADTA_SCHEMA = json.loads("""
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "Get Request",
+    "description": "Get the metadata of of one or more vehicle signals",
+    "type": "object",
+    "required": ["action", "path", "requestId" ],
+    "properties": {
+        "action": {
+            "enum": [ "getMetaData" ],
+            "description": "The identifier for the get request"
+        },
+        "path": {
+            "$ref": "vissv2base#/definitions/path"
+        },
+        "requestId": {
+            "$ref": "vissv2base#/definitions/requestId"
+        },
+        "authorization": {
+            "$ref": "vissv2base#/definitions/authorization"
+        },
+        "filter": {
+            "description": "May be specified in order to throttle the demands of subscriptions on the server. See [[viss2-core]], Filter Request chapter.",
+            "type": "object",
+            "properties": {
+                "type": {
+                    "description": "The different filter types.",
+                    "type": "string"
+                },
+                "parameter": {
+                    "description": "Parameter(s) for the different filter types",
+                    "type": "object"
+                }
+            }
+        }
+    }
+}
+""")
 
 SET_SCHEMA = json.loads("""
 {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "title": "Set Request",
-    "description": "Enables the client to set one or more values once.",
+    "description": "Enables the client to set one or more target values once.",
     "type": "object",
     "required": ["action", "path", "requestId", "value"],
     "properties": {
         "action": {
             "enum": [ "set" ],
             "description": "The identifier for the set request"
+        },
+        "value": {
+            "type": "string"
+        },
+        "path": {
+            "$ref": "vissv2base#/definitions/path"
+        },
+        "requestId": {
+            "$ref": "vissv2base#/definitions/requestId"
+        }
+    }
+}
+""")
+                        
+PROVIDE_SCHEMA = json.loads("""
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "Provide Request",
+    "description": "Enables the client to set one or more curent values once.",
+    "type": "object",
+    "required": ["action", "path", "requestId", "value"],
+    "properties": {
+        "action": {
+            "enum": [ "provide" ],
+            "description": "The identifier for the provide request"
         },
         "value": {
             "type": "string"
@@ -154,6 +218,34 @@ async def process_get(websocket, kuksa, msg):
     await websocket.send(json.dumps(reply))
 
 
+async def process_get_metadata(websocket, kuksa, msg):
+    print("Process GETMETADATA")
+    try:
+        validator = Draft202012Validator(GET_METADTA_SCHEMA, resolver=vissresolver)
+        validator.validate(msg)
+    except ValidationError as exp:
+        await websocket.send(err.create_badrequest_error(f"Invalid get request: {exp.message}"))
+        return
+    try:
+        metadata = await kuksa.get_metadata([msg["path"]])
+    except VSSClientError as exp:
+        err_data = exp.to_dict()["error"]
+        await websocket.send(err.createVISSV2Error(err_data["code"], err_data["reason"], err_data["message"]))
+        return
+
+    metadata = dp.populate_metadata(metadata)
+
+    if not any(metadata):
+        await websocket.send(err.createVISSV2Error(404, "unavailable_data", "Currently no data available for your request"))
+        return
+    reply = {}
+    reply["requestId"] = msg["requestId"]
+    reply["action"] = "getMetaData"
+    reply["data"] = metadata
+
+    await websocket.send(json.dumps(reply))
+
+
 async def process_set(websocket, kuksa, msg):
     print("Process SET")
     try:
@@ -166,6 +258,32 @@ async def process_set(websocket, kuksa, msg):
     try:
         print("Setting targets")
         res = await kuksa.set_target_values({
+            msg["path"]: Datapoint(msg["value"]),
+        })
+        print(f"Result is: {res} ")
+    except VSSClientError as exp:
+        err_data = exp.to_dict()["error"]
+        await websocket.send(err.createVISSV2Error(err_data["code"], err_data["reason"], err_data["message"]))
+        return
+
+    # All good
+    reply = {"action": "set", "requestId": msg["requestId"], "ts": datetime.now().isoformat(timespec="microseconds")}
+
+    await websocket.send(json.dumps(reply))
+
+
+async def process_provide(websocket, kuksa, msg):
+    print("Process PROVIDE")
+    try:
+        validator = Draft202012Validator(PROVIDE_SCHEMA, resolver=vissresolver)
+        validator.validate(msg)
+    except ValidationError as exp:
+        await websocket.send(err.create_badrequest_error(f"Invalid set request: {exp.message}"))
+        return
+
+    try:
+        print("Setting currents")
+        res = await kuksa.set_current_values({
             msg["path"]: Datapoint(msg["value"]),
         })
         print(f"Result is: {res} ")
@@ -215,15 +333,21 @@ async def process_request(websocket, kuksa, msg):
         await websocket.send(err.create_badrequest_error("The request does not contain an action"))
         return
 
-    if msg["action"] not in ["get", "set", "subscribe"]:
+    if msg["action"] not in ["get", "set", "subscribe", "getMetaData", "provide"]:
         await websocket.send(err.create_badrequest_error(f"Unknown action {msg['action']}"))
         return
 
     if msg["action"] == "get":
         await process_get(websocket, kuksa, msg)
 
+    elif msg["action"] == "getMetaData":
+        await process_get_metadata(websocket, kuksa, msg)
+
     elif msg["action"] == "set":
         await process_set(websocket, kuksa, msg)
+    
+    elif msg["action"] == "provide":
+        await process_provide(websocket, kuksa, msg)
 
     elif msg["action"] == "subscribe":
         await process_subscribe(websocket, kuksa, msg)

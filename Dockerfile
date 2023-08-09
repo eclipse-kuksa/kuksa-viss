@@ -10,4 +10,4 @@ COPY . ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Command to run the compiled executable
-CMD ["python", "tiniyvissv2.py"]
+ENTRYPOINT ["python", "tiniyvissv2.py"]

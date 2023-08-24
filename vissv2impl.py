@@ -328,12 +328,16 @@ async def process_subscribe(websocket, kuksa, msg):
         return
 
 
-async def process_request(websocket, kuksa, msg):
+async def process_request(websocket, kuksa, msg, provide_enabled):
     if "action" not in msg:
         await websocket.send(err.create_badrequest_error("The request does not contain an action"))
         return
+    
+    actions = ["get", "set", "subscribe", "getMetaData"]
+    if provide_enabled:
+        actions.append("provide")
 
-    if msg["action"] not in ["get", "set", "subscribe", "getMetaData", "provide"]:
+    if msg["action"] not in actions:
         await websocket.send(err.create_badrequest_error(f"Unknown action {msg['action']}"))
         return
 
@@ -346,7 +350,7 @@ async def process_request(websocket, kuksa, msg):
     elif msg["action"] == "set":
         await process_set(websocket, kuksa, msg)
     
-    elif msg["action"] == "provide":
+    elif msg["action"] == "provide" and provide_enabled:
         await process_provide(websocket, kuksa, msg)
 
     elif msg["action"] == "subscribe":

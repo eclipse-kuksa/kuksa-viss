@@ -33,6 +33,19 @@ async def hello():
         rep = await websocket.recv()
         print(f"<<< {rep}")
 
+        await websocket.send('''{"action": "getMetaData", "path": "Vehicle.OBD.Speed", "requestId":"sddf"}''')
+        rep = await websocket.recv()
+        print(f"<<< {rep}")
+
+        await websocket.send('''{"action": "getMetaData", "path": "Vehicle.NotExist", "requestId":"sddf"}''')
+        rep = await websocket.recv()
+        print(f"<<< {rep}")
+
+        await websocket.send('''{"action": "provide", "path": "Vehicle.Speed", "value": "20", "requestId":"sddf"}''')
+        rep = await websocket.recv()
+        print(f"<<< {rep}")
+
+
         print("SEEEEEEEEEET")
 
         await websocket.send('''{"action": "set"}''')

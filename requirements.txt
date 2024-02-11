@@ -15,7 +15,7 @@ colorama==0.4.6
     # via cmd2
 decorator==5.1.1
     # via jsonpath-ng
-grpcio==1.54.0
+grpcio==1.54.3
     # via
     #   grpcio-tools
     #   kuksa-client
